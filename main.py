@@ -28,9 +28,6 @@ if __name__ == "__main__":
         sum("FinalPrice").alias("Monetary"),
     )
 
-    # criteria: If Recency > 30 days and Frequency < 2, label as churned
-    rfm_data = rfm_data.withColumn("IsChurn", when((col("Recency") > 30) & (col("Frequency") < 2), 1).otherwise(0))
-
     assembler = VectorAssembler(inputCols=["Recency", "Frequency", "Monetary"], outputCol="features")
     rfm_features = assembler.transform(rfm_data)
 
@@ -38,6 +35,9 @@ if __name__ == "__main__":
     kmeans = KMeans().setK(5).setSeed(1)
     kmeans_model = kmeans.fit(rfm_features)
     rfm_data = kmeans_model.transform(rfm_features)
+
+    # criteria: If Recency > 30 days and Frequency < 2, label as churned
+    rfm_data = rfm_data.withColumn("IsChurn", when((col("Recency") > 30) & (col("Frequency") < 2), 1).otherwise(0))
 
     churn_data = rfm_data.select("CustomerID", "Recency", "Frequency", "Monetary", "IsChurn")
 
