@@ -4,10 +4,9 @@ import shutil
 
 from pyspark.ml.classification import LogisticRegression
 from pyspark.sql import SparkSession
-from pyspark.sql.functions import col, datediff, current_date, count, when, to_date, sum, max
+from pyspark.sql.functions import col, datediff, current_date, count, when, sum, max
 from pyspark.ml.clustering import KMeans
 from pyspark.ml.feature import VectorAssembler
-from pyspark.sql.types import DoubleType
 
 if __name__ == "__main__":
     spark = (SparkSession.builder.appName("E-commerce IDSS")
