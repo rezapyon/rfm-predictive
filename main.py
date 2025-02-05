@@ -15,20 +15,23 @@ if __name__ == "__main__":
              .config("spark.driver.bindAddress", "127.0.0.1")
              .getOrCreate())
 
-    data = spark.read.csv("./ecommerce_dataset_updated.csv", header=True, inferSchema=True)
+    data = spark.read.csv("./online_retail.csv", header=True, inferSchema=True)
     data = data.dropna()
 
-    data = data.withColumn("Final_Price", when(col("Final_Price").cast(DoubleType()).isNotNull(), col("Final_Price").cast(DoubleType())).otherwise(0.0))
-    data = data.withColumn('Purchase_Date', to_date(col('Purchase_Date'), 'd-M-yyyy'))
+    data = (data.withColumn("Quantity", col("Quantity").cast("int"))
+            .withColumn("UnitPrice", col("UnitPrice").cast("double")))
 
-    rfm_data = data.groupBy("User_ID").agg(
-        (datediff(current_date(), max("Purchase_Date"))).alias("Recency"),
-        count("Purchase_Date").alias("Frequency"),
-        sum("Final_Price").alias("Monetary"),
+    data = data.withColumn("FinalPrice", col("Quantity") * col("UnitPrice"))
+    # data = data.withColumn('Purchase_Date', to_date(col('Purchase_Date'), 'd-M-yyyy'))
+
+    rfm_data = data.groupBy("CustomerID").agg(
+        (datediff(current_date(), max("InvoiceDate"))).alias("Recency"),
+        count("InvoiceDate").alias("Frequency"),
+        sum("FinalPrice").alias("Monetary"),
     )
 
     # criteria: If Recency > 30 days and Frequency < 2, label as churned
-    rfm_data = rfm_data.withColumn("Is_Churn", when((col("Recency") > 30) & (col("Frequency") < 2), 1).otherwise(0))
+    rfm_data = rfm_data.withColumn("IsChurn", when((col("Recency") > 30) & (col("Frequency") < 2), 1).otherwise(0))
 
     assembler = VectorAssembler(inputCols=["Recency", "Frequency", "Monetary"], outputCol="features")
     rfm_features = assembler.transform(rfm_data)
@@ -38,21 +41,21 @@ if __name__ == "__main__":
     kmeans_model = kmeans.fit(rfm_features)
     rfm_data = kmeans_model.transform(rfm_features)
 
-    churn_data = rfm_data.select("User_ID", "Recency", "Frequency", "Monetary", "Is_Churn")
+    churn_data = rfm_data.select("CustomerID", "Recency", "Frequency", "Monetary", "IsChurn")
 
     # Vectorize features for logistic regression
     assembler = VectorAssembler(inputCols=["Recency", "Frequency", "Monetary"], outputCol="features")
     churn_features = assembler.transform(churn_data)
 
     # Train logistic regression model
-    lr = LogisticRegression(featuresCol="features", labelCol="Is_Churn")
+    lr = LogisticRegression(featuresCol="features", labelCol="IsChurn")
     lr_model = lr.fit(churn_features)
 
     # Make predictions
     predictions = lr_model.transform(churn_features)
 
     # Store results in a CSV file for Superset
-    final_results = predictions.select("User_ID", "Recency", "Frequency", "Monetary", "Is_Churn", "prediction")
+    final_results = predictions.select("CustomerID", "Recency", "Frequency", "Monetary", "IsChurn", "prediction")
 
     output_dir = "./final_result"
     final_results.write.mode("overwrite").csv(output_dir, header=True)
