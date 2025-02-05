@@ -1,16 +1,19 @@
+import glob
 import os
+import shutil
 
 from pyspark.ml.classification import LogisticRegression
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, datediff, current_date, count, when, to_date, sum, max
 from pyspark.ml.clustering import KMeans
-from pyspark.ml.feature import VectorAssembler, StringIndexer
+from pyspark.ml.feature import VectorAssembler
 from pyspark.sql.types import DoubleType
 
 if __name__ == "__main__":
-    os.environ['HADOOP_HOME'] = './'
-
-    spark = SparkSession.builder.appName("E-commerce IDSS").getOrCreate()
+    spark = (SparkSession.builder.appName("E-commerce IDSS")
+             .master("local[*]")
+             .config("spark.driver.bindAddress", "127.0.0.1")
+             .getOrCreate())
 
     data = spark.read.csv("./ecommerce_dataset_updated.csv", header=True, inferSchema=True)
     data = data.dropna()
@@ -50,4 +53,16 @@ if __name__ == "__main__":
 
     # Store results in a CSV file for Superset
     final_results = predictions.select("User_ID", "Recency", "Frequency", "Monetary", "Is_Churn", "prediction")
-    final_results.write.mode("overwrite").csv("./final_results.csv", header=True)
+
+    output_dir = "./final_result"
+    final_results.write.mode("overwrite").csv(output_dir, header=True)
+
+    part_file = os.path.join(output_dir, "part-00000-*.csv")
+    final_file = "./final_results.csv"
+
+    for filename in glob.glob(part_file):
+        shutil.move(filename, final_file)
+
+    shutil.rmtree(output_dir)
+
+    spark.stop()
