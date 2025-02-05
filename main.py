@@ -21,7 +21,6 @@ if __name__ == "__main__":
             .withColumn("UnitPrice", col("UnitPrice").cast("double")))
 
     data = data.withColumn("FinalPrice", col("Quantity") * col("UnitPrice"))
-    # data = data.withColumn('Purchase_Date', to_date(col('Purchase_Date'), 'd-M-yyyy'))
 
     rfm_data = data.groupBy("CustomerID").agg(
         (datediff(current_date(), max("InvoiceDate"))).alias("Recency"),
